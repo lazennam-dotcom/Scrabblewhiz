@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scrabble Word Whiz - CSW24 Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'Lexend', sans-serif;
+            background: #f0f4f8;
+            color: #1a202c;
+            overflow: hidden;
+        }
+
+        /* Flexible 9:16 Aspect ratio container for iPad/PC */
+        .app-container {
+            width: 100%;
+            height: 100dvh;
+        }
+        @media (min-width: 500px) {
+            .app-container {
+                height: 92dvh; /* Flexibly scales with screen height */
+                max-height: 950px;
+                min-height: 600px;
+                width: auto; /* Width is auto-calculated based on height */
+                aspect-ratio: 9 / 16; /* Enforces perfect phone ratio */
+                border-radius: 2.5rem;
+                /* Simulates a device frame on larger screens */
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.3), 0 0 0 10px #cbd5e1;
+            }
+        }
+
+        .scrabble-tile {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 42px;
+            height: 42px;
+            background: #f4d03f;
+            border-radius: 4px;
+            border-bottom: 4px solid #d4ac0d;
+            font-weight: 700;
+            font-size: 1.25rem;
+            text-transform: uppercase;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .scrabble-tile.used {
+            background-color: #e2e8f0 !important;
+            border-bottom-color: #cbd5e1 !important;
+            color: #94a3b8 !important;
+        }
+
+        .tile-value {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 0.55rem;
+        }
+
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+
+        .confetti {
+            position: absolute; /* Changed from fixed to stay inside the container */
+            width: 10px;
+            height: 10px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        .category-card {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .category-card:hover {
+            transform: translateY(-2px);
+            background-color: #eef2ff;
+        }
+        .category-card.active {
+            border-color: #4f46e5;
+            background-color: #eef2ff;
+            box-shadow: 0 0 0 2px #4f46e5;
+        }
+
+        .reveal-anim {
+            animation: reveal 0.3s ease-out;
+        }
+        @keyframes reveal {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .found-word-tag {
+            background: #ecfdf5;
+            color: #059669;
+            border: 1px solid #10b981;
+            padding: 2px 10px;
+            border-radius: 99px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: inline-block;
+            margin: 3px;
+            text-transform: uppercase;
+        }
+
+        .missing-word-tag {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #ef4444;
+            padding: 2px 10px;
+            border-radius: 99px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: inline-block;
+            margin: 3px;
+            text-transform: uppercase;
+        }
+
+        .streak-badge {
+            background: #f59e0b;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            margin-top: 4px;
+            display: inline-block;
+            animation: bounce 0.6s infinite alternate;
+            box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+        }
+
+        @keyframes bounce {
+            from { transform: scale(1); }
+            to { transform: scale(1.08); }
+        }
+
+        .timer-bar-transition {
+            transition: width 1s linear, background-color 0.3s ease;
+        }
+        
+        /* Custom scrollbar for inner screens */
+        .screen-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .screen-scroll::-webkit-scrollbar-thumb {
+            background-color: #cbd5e1;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="min-h-screen w-full flex items-center justify-center sm:p-4">
+
+    <div id="app" class="app-container bg-white shadow-2xl overflow-hidden relative flex flex-col">
+        <!-- Header -->
+        <div class="bg-indigo-600 p-4 text-white text-center relative flex-shrink-0 z-10 shadow-sm">
+            <h1 class="text-xl font-bold flex items-center justify-center gap-2">
+                <span>🔠</span> Scrabble Whiz
+            </h1>
+            <p class="text-indigo-200 text-[10px] mt-0.5 uppercase tracking-[0.2em] font-bold">CSW24 Database</p>
+        </div>
+
+        <!-- Welcome Screen -->
+        <div id="welcome-screen" class="p-6 flex-1 flex flex-col justify-center items-center screen-scroll overflow-y-auto">
+            <div class="w-full max-w-sm text-center">
+                
+                <!-- Massive attractive Scrabble tile icon -->
+                <div class="flex justify-center mb-8 mt-2">
+                    <div class="relative inline-flex items-center justify-center w-36 h-36 bg-[#f4d03f] rounded-3xl border-b-[10px] border-[#d4ac0d] shadow-2xl transform rotate-3 hover:-rotate-3 hover:scale-105 transition-all duration-300">
+                        <span class="text-[5.5rem] font-black text-[#1a202c] uppercase">W</span>
+                        <span class="absolute bottom-3 right-4 text-2xl font-bold text-[#1a202c]">4</span>
+                    </div>
+                </div>
+
+                <h2 class="text-3xl font-black text-gray-800 mb-8 tracking-tight">Welcome to<br>Scrabble Whiz!</h2>
+                <div class="mb-8">
+                    <label class="block text-gray-700 text-lg font-bold mb-3">What's your name?</label>
+                    <input type="text" id="player-name-input" class="w-full p-4 border-2 border-gray-100 rounded-2xl focus:border-indigo-500 focus:outline-none text-2xl font-bold text-center text-indigo-600 placeholder-gray-300 shadow-inner" placeholder="Enter your name..." autocomplete="off" onkeypress="if(event.key === 'Enter') goToSetup()">
+                </div>
+                <button onclick="goToSetup()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xl font-bold py-4 px-6 rounded-2xl transition-all shadow-lg active:scale-95">
+                    Let's Play!
+                </button>
+            </div>
+        </div>
+
+        <!-- Setup Screen (Main Menu & Subcategories) -->
+        <div id="setup-screen" class="p-5 flex-1 flex flex-col hidden screen-scroll overflow-y-auto">
+            <div class="flex justify-between items-center mb-5 flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <button onclick="goToWelcome()" class="text-gray-400 hover:text-indigo-600 transition-colors p-1 rounded-full hover:bg-gray-100 active:scale-95" title="Change Name">
+                        <span class="text-xl">⬅️</span>
+                    </button>
+                    <h3 id="setup-title" class="text-gray-700 text-lg font-bold">Choose a Category:</h3>
+                </div>
+                <div class="text-sm font-bold text-indigo-500 bg-indigo-50 px-4 py-1.5 rounded-full shadow-inner"><span id="setup-player-name">Player</span></div>
+            </div>
+            
+            <!-- STEP 1: Main Category Selection -->
+            <div id="main-category-section" class="flex-1 flex flex-col">
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div onclick="selectCategory('2', '2 Letters')" class="category-card border-2 border-gray-100 p-4 rounded-3xl text-center active">
+                        <div class="text-5xl mb-3 mt-1">✌️</div>
+                        <div class="font-bold text-base text-gray-800">2 Letters</div>
+                        <div class="text-xs text-gray-400 mt-0.5">120+ words</div>
+                    </div>
+                    <div onclick="selectCategory('3', '3 Letters')" class="category-card border-2 border-gray-100 p-4 rounded-3xl text-center">
+                        <div class="text-5xl mb-3 mt-1">🤟</div>
+                        <div class="font-bold text-base text-gray-800">3 Letters</div>
+                        <div class="text-xs text-gray-400 mt-0.5">1000+ words</div>
+                    </div>
+                    <div onclick="selectCategory('4', '4 Letters')" class="category-card border-2 border-gray-100 p-4 rounded-3xl text-center">
+                        <div class="text-5xl mb-3 mt-1">🖖</div>
+                        <div class="font-bold text-base text-gray-800">4 Letters</div>
+                        <div class="text-xs text-gray-400 mt-0.5">2000+ words</div>
+                    </div>
+                    <div onclick="selectCategory('Bingo', 'Bingo (7s)')" class="category-card border-2 border-gray-100 p-4 rounded-3xl text-center">
+                        <div class="text-5xl mb-3 mt-1">🎰</div>
+                        <div class="font-bold text-base text-gray-800">Bingo (7s)</div>
+                        <div class="text-xs text-gray-400 mt-0.5">Top 15 Stems</div>
+                    </div>
+                    <div onclick="selectCategory('custom', 'Custom')" class="category-card border-2 border-gray-100 p-4 rounded-3xl text-center col-span-2">
+                        <div class="text-5xl mb-3 mt-1">✍️</div>
+                        <div class="font-bold text-base text-gray-800">Custom List</div>
+                        <div class="text-xs text-gray-400 mt-0.5">Paste your own words</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STEP 2: Subcategory Selection -->
+            <div id="sub-category-section" class="hidden flex-1 flex flex-col">
+                <div class="flex items-center gap-3 mb-6">
+                    <button onclick="backToCategories()" class="text-gray-500 hover:text-indigo-600 font-bold px-4 py-2 bg-gray-100 hover:bg-indigo-50 rounded-xl transition-colors text-sm flex items-center gap-1 active:scale-95">
+                        <span>⬅️</span> Back
+                    </button>
+                    <div class="text-lg font-bold text-gray-700">Category: <span id="selected-cat-name" class="text-indigo-600"></span></div>
+                </div>
+
+                <!-- Unified Subcategory Selector -->
+                <div id="subcategory-area" class="hidden mb-5 bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                    <label id="subcat-label" class="block text-xs font-bold text-indigo-600 mb-2 uppercase tracking-wider">Subcategory:</label>
+                    <select id="subcat-select" class="w-full p-3 border-2 border-white rounded-xl focus:border-indigo-500 focus:outline-none text-base text-gray-700 font-bold bg-white shadow-sm cursor-pointer">
+                        <!-- Populated dynamically -->
+                    </select>
+                </div>
+
+                <div id="custom-input-area" class="hidden mb-5">
+                    <label class="block text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider">Custom Word List:</label>
+                    <textarea id="word-input" class="w-full h-28 p-3 border-2 border-gray-200 rounded-xl focus:border-indigo-500 focus:outline-none text-sm font-medium text-gray-700" placeholder="Paste words separated by spaces..."></textarea>
+                </div>
+
+                <!-- This button naturally pushes to bottom -->
+                <button onclick="startGame()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xl font-bold py-4 px-6 rounded-2xl transition-all shadow-lg mt-auto active:scale-95">
+                    Play Category!
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="p-5 flex-1 flex flex-col hidden screen-scroll overflow-y-auto relative">
+            
+            <!-- PAUSE OVERLAY (Hides Letters and Game Board completely) -->
+            <div id="pause-overlay" class="absolute inset-0 bg-rose-500/95 backdrop-blur-sm z-30 hidden flex-col items-center justify-center rounded-b-[2.5rem] shadow-inner">
+                <span class="text-5xl mb-3">⏸️</span>
+                <span class="text-white text-2xl font-black tracking-widest uppercase">PAUSED</span>
+            </div>
+
+            <!-- Game Controls (Exit / Last Answer / Pause) -->
+            <div class="flex justify-between items-center mb-3 pb-3 border-b border-gray-100 flex-shrink-0">
+                <button onclick="exitToHome()" class="text-gray-400 hover:text-rose-500 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 transition-colors">
+                    <span>🏠</span> Exit
+                </button>
+                <button id="prev-btn" onclick="showPreviousAnswer()" class="bg-amber-50 text-amber-600 hover:bg-amber-100 text-[10px] font-bold uppercase tracking-wider py-1.5 px-3 rounded-full flex items-center gap-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <span>⏮️</span> Last Answer
+                </button>
+                <button id="pause-btn" onclick="togglePause()" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-[10px] font-bold uppercase tracking-wider py-1.5 px-3 rounded-full flex items-center gap-1 transition-colors z-40 relative">
+                    <span>⏸️</span> Pause
+                </button>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="flex justify-between items-start mb-4 flex-shrink-0">
+                <div class="w-1/3">
+                    <div class="text-[10px] font-bold text-gray-400 uppercase truncate"><span id="player-name-display">Player</span>'s Score</div>
+                    <div id="score" class="text-indigo-600 text-xl font-black leading-tight">0</div>
+                    <div id="streak-container" class="hidden h-5">
+                        <div id="streak-label" class="streak-badge">1 COMBO</div>
+                    </div>
+                </div>
+                <div class="text-center w-1/3 mt-0.5">
+                    <div id="answer-label" class="text-[10px] font-bold text-gray-400 uppercase">Find Words:</div>
+                    <div id="progress-display" class="text-indigo-600 text-lg font-black uppercase tracking-widest">0 / 0</div>
+                </div>
+                <div class="text-right w-1/3">
+                    <div class="text-[10px] font-bold text-gray-400 uppercase">Progress</div>
+                    <div class="text-emerald-500 text-xs font-black leading-tight"><span id="answered-count">0</span> Done</div>
+                    <div class="text-rose-500 text-xs font-black leading-tight"><span id="remaining-count">0</span> Left</div>
+                </div>
+            </div>
+
+            <!-- Timer Bar -->
+            <div id="timer-container" class="mb-4 flex-shrink-0">
+                <div class="flex justify-between text-[10px] font-bold text-gray-500 mb-1">
+                    <span>Time Left</span>
+                    <span id="timer-text" class="text-indigo-600">10s</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                    <div id="timer-bar" class="bg-indigo-600 h-1.5 rounded-full timer-bar-transition" style="width: 100%"></div>
+                </div>
+            </div>
+
+            <div id="quiz-container" class="text-center flex-1 flex flex-col">
+                <div class="relative flex-1 flex flex-col justify-center min-h-[120px]">
+                    <div id="found-words-list" class="flex flex-wrap justify-center content-center mb-3 min-h-[30px]">
+                        <!-- Found words displayed here -->
+                    </div>
+                    
+                    <!-- Modified gap to ensure 7 tiles fit gracefully -->
+                    <div id="tile-display" class="flex flex-wrap justify-center content-center gap-1.5 mb-4 min-h-[50px]">
+                        <!-- Tiles injected here -->
+                    </div>
+                </div>
+
+                <!-- Input area -->
+                <div class="relative mb-4 flex-shrink-0">
+                    <input type="text" id="answer-input" autocomplete="off" class="w-full text-center text-2xl font-bold tracking-[0.2em] uppercase py-2.5 border-b-4 border-gray-100 focus:border-indigo-500 focus:outline-none transition-colors" placeholder="____">
+                </div>
+
+                <div id="feedback" class="h-5 mb-3 font-bold text-xs transition-all flex-shrink-0"></div>
+
+                <!-- Pushed to the bottom of the flex container -->
+                <div class="grid grid-cols-4 gap-2 mt-auto flex-shrink-0 pb-2">
+                    <button id="submit-btn" onclick="checkAnswer()" class="col-span-2 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl transition-all shadow-md active:scale-95 text-sm">
+                        SUBMIT
+                    </button>
+                    <button id="hint-btn" onclick="useHint()" title="Hint First Letter" class="col-span-1 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl flex items-center justify-center transition-all shadow-md active:scale-95 text-3xl">
+                        💡
+                    </button>
+                    <button id="skip-btn" onclick="skipWord()" class="col-span-1 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-500 font-bold py-3.5 rounded-xl flex items-center justify-center transition-all shadow-md active:scale-95 text-3xl">
+                        ⏭️
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Previous Answer Modal -->
+        <div id="prev-modal" class="absolute inset-0 bg-gray-900/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+            <div class="bg-white rounded-[2rem] shadow-2xl p-5 w-full max-w-sm relative transform transition-all scale-100 max-h-[80vh] overflow-y-auto screen-scroll">
+                <button onclick="closePreviousAnswer()" class="absolute top-3 right-4 text-gray-400 hover:text-gray-800 font-bold text-2xl">&times;</button>
+                <h3 class="text-base font-black text-gray-800 mb-3 text-center uppercase tracking-widest text-indigo-600">Previous Round</h3>
+                
+                <div class="text-center mb-5">
+                    <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">Tiles</div>
+                    <div id="prev-tiles" class="flex flex-wrap justify-center gap-1.5 transform scale-90 origin-top"></div>
+                </div>
+                
+                <div class="text-center mb-5">
+                    <div class="text-[10px] font-bold text-gray-400 uppercase mb-2">Answers</div>
+                    <div id="prev-words" class="flex flex-wrap justify-center gap-1 min-h-[30px]"></div>
+                </div>
+                
+                <button onclick="closePreviousAnswer()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-colors active:scale-95">
+                    Back to Game
+                </button>
+            </div>
+        </div>
+
+        <!-- Result Screen -->
+        <div id="result-screen" class="p-6 text-center flex-1 flex flex-col justify-center hidden screen-scroll overflow-y-auto">
+            <div class="flex-1 flex flex-col justify-center">
+                <div id="result-icon" class="text-5xl mb-3">🎖️</div>
+                <h2 id="result-title" class="text-2xl font-bold text-gray-800 mb-1">Quiz Finished!</h2>
+                <p class="text-gray-500 mb-5 text-sm"><span id="result-player-name" class="font-bold text-indigo-600">Player</span>, you mastered <span id="final-solved" class="font-bold text-indigo-600">0</span> tile sets!</p>
+                
+                <div class="grid grid-cols-2 gap-2 mb-5">
+                    <div class="bg-indigo-50 p-3 rounded-2xl flex flex-col justify-center">
+                        <div class="text-[9px] text-indigo-400 uppercase font-black tracking-widest mb-1">Total Points</div>
+                        <div id="final-score" class="text-3xl font-black text-indigo-600">0</div>
+                    </div>
+                    <div class="bg-emerald-50 p-3 rounded-2xl flex flex-col justify-center">
+                        <div class="text-[9px] text-emerald-500 uppercase font-black tracking-widest mb-1">Accuracy</div>
+                        <div id="final-accuracy" class="text-3xl font-black text-emerald-600">0%</div>
+                    </div>
+                </div>
+
+                <div class="text-left mb-6">
+                    <div class="text-[10px] font-bold text-gray-400 uppercase mb-2 text-center">Words Missed (<span id="missed-count">0</span>)</div>
+                    <div id="missed-words-container" class="bg-rose-50 border border-rose-100 p-2 rounded-xl max-h-32 overflow-y-auto screen-scroll flex flex-wrap justify-center gap-1">
+                        <!-- Missed words injected here -->
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="resetApp()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg transition-transform active:scale-95 mt-auto flex-shrink-0">
+                Back to Menu
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // CLEANED DATABASE ARRAYS (CSW24 standard)
+        const CSW24 = {
+            "2": ["AA", "AB", "AD", "AE", "AG", "AH", "AI", "AL", "AM", "AN", "AR", "AS", "AT", "AW", "AX", "AY", "BA", "BE", "BI", "BO", "BY", "CH", "DA", "DE", "DI", "DO", "EA", "ED", "EE", "EF", "EH", "EL", "EM", "EN", "ER", "ES", "ET", "EW", "EX", "FA", "FE", "FY", "GI", "GO", "GU", "HA", "HE", "HI", "HM", "HO", "ID", "IF", "IN", "IO", "IS", "IT", "JA", "JO", "KA", "KI", "KO", "KY", "LA", "LI", "LO", "MA", "ME", "MI", "MM", "MO", "MU", "MY", "NA", "NE", "NO", "NU", "NY", "OB", "OD", "OE", "OF", "OH", "OI", "OK", "OM", "ON", "OO", "OP", "OR", "OS", "OU", "OW", "OX", "OY", "PA", "PE", "PI", "PO", "QI", "RE", "SH", "SI", "SO", "ST", "TA", "TE", "TI", "TO", "UG", "UH", "UM", "UN", "UP", "UR", "US", "UT", "WE", "WO", "XI", "XU", "YA", "YE", "YO", "YU", "ZA", "ZE", "ZO"],
+            "3": ["AAH", "AAL", "AAS", "ABA", "ABB", "ABS", "ABY", "ACE", "ACH", "ACK", "ACT", "ADD", "ADO", "ADS", "ADZ", "AFF", "AFT", "AGA", "AGE", "AGO", "AGS", "AHA", "AHI", "AHS", "AIA", "AID", "AIL", "AIM", "AIN", "AIR", "AIS", "AIT", "AJI", "AKA", "AKE", "ALA", "ALB", "ALE", "ALL", "ALP", "ALS", "ALT", "ALU", "AMA", "AME", "AMI", "AMP", "AMU", "ANA", "AND", "ANE", "ANI", "ANN", "ANS", "ANT", "ANY", "APE", "APO", "APP", "APT", "ARB", "ARC", "ARD", "ARE", "ARF", "ARK", "ARM", "ARO", "ARS", "ART", "ARY", "ASH", "ASK", "ASP", "ASS", "ATE", "ATS", "ATT", "AUA", "AUE", "AUF", "AUK", "AVA", "AVE", "AVI", "AVO", "AWA", "AWE", "AWK", "AWL", "AWN", "AXE", "AYE", "AYS", "AYU", "AZO", "BAA", "BAC", "BAD", "BAE", "BAG", "BAH", "BAL", "BAM", "BAN", "BAO", "BAP", "BAR", "BAS", "BAT", "BAW", "BAY", "BED", "BEE", "BEG", "BEL", "BEN", "BES", "BET", "BEY", "BEZ", "BIB", "BID", "BIG", "BIN", "BIO", "BIS", "BIT", "BIZ", "BOA", "BOB", "BOD", "BOG", "BOH", "BOI", "BOK", "BON", "BOO", "BOP", "BOR", "BOS", "BOT", "BOW", "BOX", "BOY", "BRA", "BRO", "BRR", "BRU", "BUB", "BUD", "BUG", "BUM", "BUN", "BUR", "BUS", "BUT", "BUY", "BYE", "BYS", "CAA", "CAB", "CAD", "CAF", "CAG", "CAL", "CAM", "CAN", "CAP", "CAR", "CAT", "CAW", "CAY", "CAZ", "CEE", "CEL", "CEP", "CHA", "CHE", "CHI", "CID", "CIG", "CIS", "CIT", "CLY", "COB", "COD", "COG", "COL", "CON", "COO", "COP", "COR", "COS", "COT", "COW", "COX", "COY", "COZ", "CRU", "CRY", "CUB", "CUD", "CUE", "CUM", "CUP", "CUR", "CUT", "CUZ", "CWM", "DAB", "DAD", "DAE", "DAG", "DAH", "DAK", "DAL", "DAM", "DAN", "DAP", "DAS", "DAW", "DAY", "DEB", "DEE", "DEF", "DEG", "DEI", "DEL", "DEN", "DEP", "DEV", "DEW", "DEX", "DEY", "DIB", "DID", "DIE", "DIF", "DIG", "DIM", "DIN", "DIP", "DIS", "DIT", "DIV", "DOB", "DOC", "DOD", "DOE", "DOF", "DOG", "DOH", "DOL", "DOM", "DON", "DOO", "DOP", "DOR", "DOS", "DOT", "DOW", "DOX", "DOY", "DRY", "DSO", "DUB", "DUD", "DUE", "DUG", "DUH", "DUI", "DUM", "DUN", "DUO", "DUP", "DUR", "DUX", "DYE", "DZO", "EAN", "EAR", "EAS", "EAT", "EAU", "EBB", "ECH", "ECO", "ECU", "EDH", "EDS", "EEK", "EEL", "EEN", "EEW", "EFF", "EFS", "EFT", "EGG", "EGO", "EHS", "EIK", "EKE", "ELD", "ELF", "ELK", "ELL", "ELM", "ELS", "ELT", "EME", "EMO", "EMS", "EMU", "END", "ENE", "ENG", "ENS", "EON", "ERA", "ERE", "ERG", "ERK", "ERM", "ERN", "ERR", "ERS", "ESS", "EST", "ETA", "ETH", "EUK", "EVE", "EVO", "EWE", "EWK", "EWT", "EWW", "EXO", "EYE", "FAB", "FAD", "FAE", "FAG", "FAH", "FAM", "FAN", "FAP", "FAR", "FAS", "FAT", "FAV", "FAW", "FAY", "FED", "FEE", "FEG", "FEH", "FEM", "FEN", "FER", "FES", "FET", "FEU", "FEW", "FEY", "FEZ", "FIB", "FID", "FIE", "FIG", "FIL", "FIN", "FIR", "FIT", "FIX", "FIZ", "FLU", "FLY", "FOB", "FOE", "FOG", "FOH", "FON", "FOO", "FOP", "FOR", "FOU", "FOX", "FOY", "FRA", "FRO", "FUB", "FUD", "FUG", "FUM", "FUN", "FUR", "GAB", "GAD", "GAE", "GAG", "GAK", "GAL", "GAM", "GAN", "GAP", "GAR", "GAS", "GAT", "GAU", "GAW", "GAY", "GED", "GEE", "GEL", "GEM", "GEN", "GEO", "GER", "GET", "GEY", "GHI", "GIB", "GID", "GIE", "GIF", "GIG", "GIN", "GIO", "GIP", "GIS", "GIT", "GJU", "GNU", "GOA", "GOB", "GOD", "GOE", "GON", "GOO", "GOR", "GOS", "GOT", "GOV", "GOX", "GRR", "GUB", "GUE", "GUL", "GUM", "GUN", "GUP", "GUR", "GUS", "GUT", "GUV", "GUY", "GYM", "GYP", "HAD", "HAE", "HAG", "HAH", "HAJ", "HAM", "HAN", "HAO", "HAP", "HAS", "HAT", "HAW", "HAY", "HEH", "HEM", "HEN", "HEP", "HER", "HES", "HET", "HEW", "HEX", "HEY", "HIC", "HID", "HIE", "HIM", "HIN", "HIP", "HIS", "HIT", "HMM", "HOA", "HOB", "HOC", "HOD", "HOE", "HOG", "HOH", "HOI", "HOM", "HON", "HOO", "HOP", "HOS", "HOT", "HOW", "HOX", "HOY", "HUB", "HUE", "HUG", "HUH", "HUI", "HUM", "HUN", "HUP", "HUT", "HYE", "HYP", "ICE", "ICH", "ICK", "ICY", "IDE", "IDS", "IFF", "IFS", "IGG", "ILK", "ILL", "IMP", "ING", "INK", "INN", "INS", "INT", "ION", "IOS", "IRE", "IRK", "ISH", "ISM", "ISO", "ITA", "ITS", "IWI", "IVY", "JAB", "JAG", "JAI", "JAK", "JAM", "JAP", "JAR", "JAW", "JAY", "JEE", "JET", "JEU", "JIB", "JIG", "JIN", "JIZ", "JOB", "JOE", "JOG", "JOL", "JOR", "JOT", "JOW", "JOY", "JUD", "JUG", "JUN", "JUS", "JUT", "KAB", "KAE", "KAF", "KAI", "KAK", "KAM", "KAS", "KAT", "KAW", "KAY", "KEA", "KEB", "KED", "KEF", "KEG", "KEN", "KEP", "KET", "KEX", "KEY", "KHI", "KID", "KIF", "KIN", "KIP", "KIR", "KIS", "KIT", "KOA", "KOB", "KOI", "KON", "KOP", "KOR", "KOS", "KOW", "KUE", "KYE", "KYU", "LAB", "LAC", "LAD", "LAG", "LAH", "LAM", "LAP", "LAR", "LAS", "LAT", "LAV", "LAW", "LAX", "LAY", "LEA", "LED", "LEE", "LEG", "LEI", "LEK", "LEP", "LET", "LEU", "LEV", "LEW", "LEX", "LEY", "LIB", "LID", "LIE", "LIG", "LIN", "LIP", "LIS", "LIT", "LOB", "LOC", "LOD", "LOG", "LOO", "LOP", "LOR", "LOS", "LOT", "LOU", "LOW", "LOX", "LOY", "LUD", "LUG", "LUM", "LUN", "LUR", "LUV", "LUX", "LUZ", "LYE", "LYM", "MAA", "MAC", "MAD", "MAE", "MAG", "MAK", "MAL", "MAM", "MAN", "MAP", "MAR", "MAS", "MAT", "MAW", "MAX", "MAY", "MED", "MEE", "MEG", "MEH", "MEL", "MEM", "MEN", "MES", "MET", "MEU", "MEW", "MHO", "MIB", "MIC", "MID", "MIG", "MIL", "MIM", "MIR", "MIS", "MIX", "MIZ", "MMM", "MNA", "MOA", "MOB", "MOC", "MOD", "MOE", "MOG", "MOI", "MOL", "MOM", "MON", "MOO", "MOP", "MOR", "MOS", "MOT", "MOU", "MOW", "MOY", "MOZ", "MUD", "MUG", "MUM", "MUN", "MUS", "MUT", "MUX", "MYC", "NAB", "NAE", "NAG", "NAH", "NAM", "NAN", "NAP", "NAS", "NAT", "NAV", "NAW", "NAY", "NEB", "NED", "NEE", "NEF", "NEG", "NEK", "NEP", "NET", "NEW", "NIB", "NID", "NIE", "NIL", "NIM", "NIP", "NIS", "NIT", "NIX", "NOB", "NOD", "NOG", "NOH", "NOM", "NON", "NOO", "NOR", "NOS", "NOT", "NOW", "NOX", "NOY", "NTH", "NUB", "NUG", "NUN", "NUR", "NUS", "NUT", "NYE", "NYM", "NYS", "OAF", "OAK", "OAR", "OAT", "OBA", "OBE", "OBI", "OBO", "OBS", "OCA", "OCH", "ODA", "ODD", "ODE", "ODS", "OES", "OFF", "OFT", "OHM", "OHO", "OHS", "OIK", "OIL", "OIS", "OKA", "OKE", "OLD", "OLE", "OLM", "OMA", "OMS", "ONE", "ONO", "ONS", "ONY", "OOF", "OOH", "OOM", "OON", "OOP", "OOR", "OOS", "OOT", "OPE", "OPS", "OPT", "ORA", "ORB", "ORC", "ORD", "ORE", "ORF", "ORG", "ORS", "ORT", "OSE", "OUD", "OUK", "OUP", "OUR", "OUS", "OUT", "OVA", "OWE", "OWL", "OWN", "OWT", "OXO", "OXY", "OYE", "OYS", "PAC", "PAD", "PAH", "PAK", "PAL", "PAM", "PAN", "PAP", "PAR", "PAS", "PAT", "PAU", "PAV", "PAW", "PAX", "PAY", "PEA", "PEC", "PED", "PEE", "PEG", "PEH", "PEL", "PEN", "PEP", "PER", "PES", "PET", "PEW", "PHI", "PHO", "PHT", "PIA", "PIC", "PIE", "PIG", "PIN", "PIP", "PIR", "PIS", "PIT", "PIU", "PIX", "PLU", "PLY", "POA", "POD", "POH", "POI", "POL", "POM", "POO", "POP", "POR", "POS", "POT", "POW", "POX", "POZ", "PRE", "PRO", "PRY", "PSI", "PST", "PUB", "PUD", "PUG", "PUH", "PUL", "PUN", "PUP", "PUR", "PUS", "PUT", "PUY", "PYA", "PYE", "PYX", "QAT", "QIN", "QIS", "QUA", "RAD", "RAG", "RAH", "RAI", "RAJ", "RAM", "RAN", "RAP", "RAS", "RAT", "RAV", "RAW", "RAX", "RAY", "REB", "REC", "RED", "REE", "REF", "REG", "REH", "REI", "REM", "REN", "REO", "REP", "RES", "RET", "REV", "REW", "REX", "REZ", "RHO", "RHY", "RIA", "RIB", "RID", "RIF", "RIG", "RIM", "RIN", "RIP", "RIT", "RIZ", "ROB", "ROC", "ROD", "ROE", "ROK", "ROM", "ROO", "ROT", "ROW", "RUB", "RUC", "RUD", "RUE", "RUG", "RUM", "RUN", "RUT", "RYA", "RYE", "RYU", "SAB", "SAC", "SAD", "SAE", "SAG", "SAI", "SAL", "SAM", "SAN", "SAP", "SAR", "SAT", "SAU", "SAV", "SAW", "SAX", "SAY", "SAZ", "SEA", "SEC", "SED", "SEE", "SEG", "SEI", "SEL", "SEN", "SER", "SET", "SEV", "SEW", "SEX", "SEY", "SEZ", "SHA", "SHE", "SHH", "SHY", "SIB", "SIC", "SIF", "SIG", "SIK", "SIM", "SIN", "SIP", "SIR", "SIS", "SIT", "SIX", "SKA", "SKI", "SKY", "SLY", "SMA", "SNY", "SOB", "SOC", "SOD", "SOG", "SOH", "SOL", "SOM", "SON", "SOP", "SOS", "SOT", "SOU", "SOV", "SOW", "SOX", "SOY", "SOZ", "SPA", "SPY", "SRI", "STY", "SUB", "SUD", "SUE", "SUG", "SUI", "SUK", "SUM", "SUN", "SUP", "SUQ", "SUR", "SUS", "SWY", "SYE", "SYN", "TAB", "TAD", "TAE", "TAG", "TAI", "TAJ", "TAK", "TAM", "TAN", "TAO", "TAP", "TAR", "TAS", "TAT", "TAU", "TAV", "TAW", "TAX", "TAY", "TEA", "TEC", "TED", "TEE", "TEF", "TEG", "TEL", "TEN", "TES", "TET", "TEW", "TEX", "THE", "THO", "THY", "TIC", "TID", "TIE", "TIG", "TIK", "TIL", "TIN", "TIP", "TIS", "TIT", "TIX", "TIZ", "TOC", "TOD", "TOE", "TOG", "TOM", "TON", "TOO", "TOP", "TOR", "TOT", "TOW", "TOY", "TRY", "TSK", "TUB", "TUG", "TUI", "TUM", "TUN", "TUP", "TUT", "TUX", "TWA", "TWO", "TWP", "TYE", "TYG", "UDO", "UDS", "UEY", "UFO", "UGH", "UGS", "UKE", "ULE", "ULU", "UMM", "UMP", "UMS", "UMU", "UNI", "UNS", "UPO", "UPS", "URB", "URD", "URE", "URN", "URP", "USE", "UTA", "UTE", "UTS", "UTU", "UVA", "VAC", "VAE", "VAG", "VAN", "VAR", "VAS", "VAT", "VAU", "VAV", "VAW", "VEE", "VEG", "VET", "VEX", "VIA", "VID", "VIE", "VIG", "VIM", "VIN", "VIS", "VLY", "VOE", "VOL", "VOR", "VOW", "VOX", "VUG", "VUM", "WAB", "WAD", "WAE", "WAG", "WAI", "WAN", "WAP", "WAR", "WAS", "WAT", "WAW", "WAX", "WAY", "WAZ", "WEB", "WED", "WEE", "WEM", "WEN", "WET", "WEX", "WEY", "WHA", "WHO", "WHY", "WIG", "WIN", "WIS", "WIT", "WIZ", "WOE", "WOF", "WOG", "WOK", "WON", "WOO", "WOP", "WOS", "WOT", "WOW", "WOX", "WRY", "WUD", "WUS", "WYE", "WYN", "XIS", "YAD", "YAE", "YAG", "YAH", "YAK", "YAM", "YAP", "YAR", "YAS", "YAW", "YAY", "YEA", "YEH", "YEN", "YEP", "YER", "YES", "YET", "YEW", "YEX", "YGO", "YID", "YIN", "YIP", "YOB", "YOD", "YOK", "YOM", "YON", "YOU", "YOW", "YUG", "YUK", "YUM", "YUP", "YUS", "ZAG", "ZAP", "ZAS", "ZAX", "ZEA", "ZED", "ZEE", "ZEK", "ZEL", "ZEN", "ZEP", "ZEX", "ZHO", "ZIG", "ZIN", "ZIP", "ZIT", "ZIZ", "ZOA", "ZOL", "ZOO", "ZOS", "ZUZ", "ZZZ"],
+            "4": ["AAHS", "AALS", "ABAC", "ABAS", "ABBA", "ABBE", "ABBS", "ABED", "ABER", "ABET", "ABID", "ABLE", "ABLY", "ABRI", "ABUT", "ABYE", "ABYS", "ACAI", "ACCA", "ACED", "ACER", "ACES", "ACHE", "ACHY", "ACID", "ACME", "ACNE", "ACRE", "ACRO", "ACTA", "ACTS", "ACYL", "ADAW", "ADDS", "ADDY", "ADIT", "ADOS", "ADRY", "ADZE", "AEON", "AERO", "AERY", "AESC", "AFAR", "AFFY", "AFRO", "AGAR", "AGAS", "AGED", "AGEE", "AGEN", "AGER", "AGES", "AGGY", "AGHA", "AGIN", "AGIO", "AGLU", "AGLY", "AGMA", "AGOG", "AGON", "AGRO", "AGUE", "AHED", "AHEM", "AHIS", "AHOY", "AIAS", "AIDA", "AIDE", "AIDS", "AIGA", "AILS", "AIMS", "AINE", "AINS", "AIRN", "AIRS", "AIRT", "AIRY", "AITS", "AITU", "AJAR", "AJEE", "AJIS", "AKAS", "AKED", "AKEE", "AKES", "AKIN", "ALAE", "ALAN", "ALAP", "ALAR", "ALAS", "ALAY", "ALBA", "ALBE", "ALBS", "ALCO", "ALEC", "ALEE", "ALEF", "ALES", "ALEW", "ALFA", "ALGA", "ALGO", "ALIF", "ALIT", "ALKO", "ALKY", "ALLS", "ALLY", "ALMA", "ALME", "ALMS", "ALOD", "ALOE", "ALOO", "ALOW", "ALPS", "ALSO", "ALTO", "ALTS", "ALUM", "ALUS", "AMAH", "AMAS", "AMBO", "AMEN", "AMES", "AMIA", "AMID", "AMIE", "AMIN", "AMIR", "AMIS", "AMLA", "AMMO", "AMOK", "AMPS", "AMUS", "AMYL", "ANAL", "ANAN", "ANAS", "ANCE", "ANDS", "ANES", "ANEW", "ANGA", "ANIL", "ANIS", "ANKH", "ANNA", "ANNO", "ANNS", "ANOA", "ANON", "ANOW", "ANSA", "ANTA", "ANTE", "ANTI", "ANTS", "ANUS", "APAY", "APED", "APER", "APES", "APEX", "APOD", "APOS", "APPS", "APSE", "APSO", "APTS", "AQUA", "ARAK", "ARAR", "ARBA", "ARBS", "ARCH", "ARCO", "ARCS", "ARDS", "AREA", "ARED", "AREG", "ARES", "ARET", "AREW", "ARFS", "ARGH", "ARIA", "ARID", "ARIE", "ARIL", "ARIS", "ARKS", "ARLE", "ARMS", "ARMY", "ARNA", "AROS", "AROW", "ARPA", "ARSE", "ARTI", "ARTS", "ARTY", "ARUM", "ARVO", "ARYL", "ASAR", "ASCI", "ASEA", "ASHY", "ASKS", "ASPS", "ATAP", "ATES", "ATMA", "ATOC", "ATOK", "ATOM", "ATOP", "ATUA", "AUAS", "AUFS", "AUGH", "AULA", "AULD", "AUNE", "AUNT", "AURA", "AUTO", "AVAL", "AVAS", "AVEL", "AVER", "AVES", "AVID", "AVIS", "AVOW", "AVOS", "AWAY", "AWDL", "AWED", "AWEE", "AWES", "AWFY", "AWKS", "AWLS", "AWNS", "AWNY", "AWOL", "AWRY", "AXAL", "AXED", "AXEL", "AXES", "AXIL", "AXIS", "AXLE", "AXON", "AYAH", "AYES", "AYIN", "AYRE", "AYUS", "AZAN", "AZON", "AZYM", "BAAL", "BAAS", "BABA", "BABE", "BABU", "BABY", "BACH", "BACK", "BACS", "BADE", "BADS", "BAEL", "BAES", "BAFF", "BAFT", "BAGH", "BAGS", "BAHT", "BAHU", "BAIL", "BAIT", "BAJU", "BAKE", "BALD", "BALE", "BALK", "BALL", "BALM", "BALS", "BALU", "BAMS", "BANC", "BAND", "BANE", "BANG", "BANI", "BANK", "BANS", "BANT", "BAOS", "BAPU", "BAPS", "BARB", "BARD", "BARE", "BARF", "BARK", "BARM", "BARN", "BARP", "BARS", "BASA", "BASE", "BASH", "BASK", "BASS", "BAST", "BATE", "BATH", "BATS", "BATT", "BAUD", "BAUK", "BAUR", "BAWD", "BAWK", "BAWL", "BAWN", "BAWR", "BAWS", "BAYE", "BAYS", "BAYT", "BAZZ", "BEAD", "BEAK", "BEAL", "BEAM", "BEAN", "BEAR", "BEAT", "BEAU", "BECK", "BEDE", "BEDS", "BEDU", "BEEF", "BEEN", "BEEP", "BEER", "BEES", "BEET", "BEGO", "BEGS", "BEIN", "BELL", "BELS", "BELT", "BEMA", "BEND", "BENE", "BENI", "BENJ", "BENS", "BENT", "BERE", "BERG", "BERK", "BERM", "BEST", "BETA", "BETE", "BETH", "BETS", "BEVY", "BEYS", "BHAI", "BHAT", "BHEL", "BHUT", "BIAS", "BIBB", "BIBE", "BIBS", "BICE", "BIDE", "BIDI", "BIDS", "BIEN", "BIER", "BIFF", "BIGA", "BIGG", "BIGS", "BIKE", "BILE", "BILK", "BILL", "BIMA", "BIND", "BINE", "BING", "BINK", "BINS", "BIOG", "BIOS", "BIRD", "BIRK", "BIRL", "BIRR", "BIRO", "BISE", "BISH", "BISK", "BIST", "BITE", "BITO", "BITS", "BITT", "BIZE", "BLAB", "BLAD", "BLAE", "BLAG", "BLAH", "BLAM", "BLAT", "BLAW", "BLAY", "BLEB", "BLED", "BLEE", "BLET", "BLEW", "BLEY", "BLIN", "BLIP", "BLIT", "BLOB", "BLOC", "BLOG", "BLOT", "BLOW", "BLUB", "BLUD", "BLUE", "BLUR", "BOAB", "BOAK", "BOAR", "BOAS", "BOAT", "BOBA", "BOBO", "BOBS", "BOCK", "BODE", "BODS", "BODY", "BOEP", "BOET", "BOFF", "BOGS", "BOGY", "BOHO", "BOHS", "BOIL", "BOIS", "BOKE", "BOKO", "BOKS", "BOLA", "BOLD", "BOLE", "BOLL", "BOLO", "BOLT", "BOMA", "BOMB", "BONA", "BOND", "BONE", "BONG", "BONK", "BONY", "BOOB", "BOOH", "BOOK", "BOOL", "BOOM", "BOON", "BOOR", "BOOS", "BOOT", "BOPO", "BOPS", "BORA", "BORD", "BORE", "BORK", "BORM", "BORN", "BORS", "BORT", "BOSH", "BOSK", "BOSS", "BOTA", "BOTE", "BOTH", "BOTS", "BOTT", "BOUK", "BOUN", "BOUT", "BOWL", "BOWR", "BOWS", "BOXY", "BOYF", "BOYG", "BOYO", "BOYS", "BOZO", "BRAD", "BRAE", "BRAG", "BRAK", "BRAN", "BRAP", "BRAS", "BRAT", "BRAW", "BRAY", "BRED", "BREE", "BREI", "BREN", "BRER", "BREW", "BREY", "BRIE", "BRIG", "BRIK", "BRIM", "BRIN", "BRIO", "BRIS", "BRIT", "BROD", "BROG", "BROO", "BROS", "BROW", "BRRR", "BRUH", "BRUS", "BRUT", "BRUV", "BRUX", "BUAT", "BUBA", "BUBO", "BUBS", "BUBU", "BUCK", "BUDA", "BUDI", "BUDO", "BUDS", "BUFF", "BUFO", "BUGS", "BUHL", "BUHR", "BUIK", "BUJO", "BUKE", "BULB", "BULK", "BULL", "BUMF", "BUMP", "BUMS", "BUNA", "BUND", "BUNG", "BUNN", "BUNS", "BUNT", "BUOY", "BURA", "BURB", "BURD", "BURG", "BURK", "BURL", "BURN", "BURP", "BURR", "BURS", "BURY", "BUSH", "BUSK", "BUSS", "BUST", "BUSY", "BUTE", "BUTS", "BUTT", "BUYS", "BUZZ", "BYDE", "BYES", "BYKE", "BYRE", "BYRL", "BYTE", "YURT", "YUTZ", "YUZU", "YWIS", "ZACK", "ZAGS", "ZANY", "ZAPS", "ZARF", "ZARI", "ZATI", "ZEAL", "ZEAS", "ZEBU", "ZEDA", "ZEDS", "ZEES", "ZEIN", "ZEKS", "ZELS", "ZENS", "ZEPS", "ZERK", "ZERO", "ZEST", "ZETA", "ZEZE", "ZHOS", "ZIFF", "ZIGS", "ZILA", "ZILL", "ZIMB", "ZINC", "ZINE", "ZING", "ZINS", "ZIPS", "ZITE", "ZITI", "ZITS", "ZIZZ", "ZOBO", "ZOBU", "ZOEA", "ZOIC", "ZOLS", "ZONA", "ZONE", "ZONK", "ZOOM", "ZOON", "ZOOS", "ZOOT", "ZORI", "ZOUK", "ZUKE", "ZULU", "ZUPA", "ZURF", "ZYGA", "ZYME", "ZZZS"],
+            "Bingo": {
+                "1. TISANE": ["ENTASIA", "TAENIAS", "BANTIES", "BASINET", "BESAINT", "BESTAIN", "ACETINS", "CANIEST", "CINEAST", "DESTAIN", "DETAINS", "INSTEAD", "NIDATES", "SAINTED", "SATINED", "STAINED", "ETESIAN", "FAINEST", "FANSITE", "NAIFEST", "EASTING", "EATINGS", "GAINEST", "GENISTA", "INGATES", "INGESTA", "SEATING", "TAGINES", "TANGIES", "TEASING", "TSIGANE", "HENTAIS", "SHEITAN", "STHENIA", "ISATINE", "JANTIES", "TAJINES", "INTAKES", "KENTIAS", "TANKIES", "EASTLIN", "ELASTIN", "ENTAILS", "NAILSET", "SALIENT", "SALTINE", "SLAINTE", "STANIEL", "TENAILS", "ETAMINS", "INMATES", "TAMEINS", "TAMINES", "MANTIES", "INANEST", "NANITES", "STANINE", "TANNIES", "ATONIES", "PANTIES", "PATINES", "SAPIENT", "SPINATE", "ANESTRI", "ANTSIER", "NASTIER", "RATINES", "RESIANT", "RETAINS", "RETINAS", "RETSINA", "STAINER", "STARNIE", "STEARIN", "ENTASIS", "NASTIES", "SEITANS", "SESTINA", "TANSIES", "TISANES", "INSTATE", "SATINET", "TANTIES", "AUNTIES", "SINUATE", "NAIVEST", "NATIVES", "VAINEST", "AWNIEST", "TAWNIES", "WANTIES", "ANTISEX", "SEXTAIN", "ZANIEST", "ZEATINS"],
+                "2. SATIRE": ["ARISTAE", "ASTERIA", "ATRESIA", "BAITERS", "BARITES", "REBAITS", "TERBIAS", "ATRESIC", "CRISTAE", "RACIEST", "STEARIC", "ARIDEST", "ASTERID", "ASTRIDE", "DIASTER", "DISRATE", "STAIDER", "STAIRED", "TARDIES", "TIRADES", "TRADIES", "AERIEST", "SERIATE", "FAIREST", "AGISTER", "AIGRETS", "GAITERS", "SEAGIRT", "STAGIER", "TIRAGES", "TRIAGES", "HASTIER", "SHERIAT", "IRISATE", "KARITES", "REALIST", "RETAILS", "SALTIER", "SALTIRE", "SLATIER", "TAILERS", "IMARETS", "MAESTRI", "MAISTER", "MASTIER", "MISRATE", "SEMITAR", "SMARTIE", "ANESTRI", "ANTSIER", "NASTIER", "RATINES", "RESIANT", "RETAINS", "RETINAS", "RETSINA", "STAINER", "STARNIE", "STEARIN", "OARIEST", "OTARIES", "ROASTIE", "PAIREST", "PARTIES", "PASTIER", "PIASTER", "PIASTRE", "PIRATES", "PRATIES", "RAPIEST", "TRAIPSE", "ARTSIER", "TARRIES", "TARSIER", "ARSIEST", "ARTSIES", "SAIREST", "SATIRES", "TIRASSE", "ARTIEST", "ARTISTE", "ATTIRES", "IRATEST", "RATITES", "STRIATE", "TASTIER", "TERTIAS", "RAVIEST", "TAIVERS", "VASTIER", "VERITAS", "WAISTER", "WAITERS", "WARIEST", "WASTRIE"],
+                "3. RETINA": ["ATEBRIN", "CANTIER", "CERATIN", "CERTAIN", "CREATIN", "CRINATE", "NACRITE", "TACRINE", "ANTIRED", "DETRAIN", "TRAINED", "ARENITE", "RETINAE", "TRAINEE", "FAINTER", "FENITAR", "GRANITE", "GRATINE", "INGRATE", "TANGIER", "TEARING", "HAIRNET", "INEARTH", "THERIAN", "INERTIA", "JANTIER", "NARTJIE", "KERATIN", "ENTRAIL", "LATRINE", "RATLINE", "RELIANT", "RETINAL", "TRENAIL", "MERANTI", "MINARET", "RAIMENT", "ENTRAIN", "TRANNIE", "OTARINE", "INAPTER", "PAINTER", "PERTAIN", "REPAINT", "TERRAIN", "TRAINER", "ANESTRI", "ANTSIER", "NASTIER", "RATINES", "RESIANT", "RETAINS", "RETINAS", "RETSINA", "STAINER", "STARNIE", "STEARIN", "INTREAT", "ITERANT", "NATTIER", "NITRATE", "TARTINE", "TERTIAN", "RUINATE", "TAURINE", "URANITE", "URINATE", "TAWNIER", "TINWARE"],
+                "4. AINERS": ["ANESTRA", "SANTERA", "BANTERS", "BARNETS", "CANTERS", "CARNETS", "NECTARS", "RECANTS", "SCANTER", "TANRECS", "TRANCES", "DARNEST", "ENDARTS", "STANDER", "STARNED", "EARNEST", "EASTERN", "NEAREST", "RATEENS", "STERANE", "INFARES", "SERAFIN", "ANGRIES", "EARINGS", "ERASING", "GAINERS", "GRAINES", "REAGINS", "REGAINS", "REGINAS", "SEARING", "SERINGA", "ERINGOS", "HERNIAS", "NEARISH", "INJERAS", "ALINERS", "NAILERS", "RENAILS", "MARINES", "REMAINS", "SEMINAR", "SIRNAME", "INSANER", "INSNARE", "PANIERS", "RAPINES", "SIERRAN", "SNARIER", "ARSINES", "SARNIES", "SENIORS", "SONERIS", "SONSIER", "TANNERS", "ATONERS", "SANTERO", "SENATOR", "TREASON", "PANTERS", "PARENTS", "PASTERN", "PERSANT", "TREPANS", "ERRANTS", "RANTERS", "SARSNET", "TRANSES", "NATTERS", "TRATTENS", "AUNTERS", "NATURES", "SAUNTER", "SERVANT", "TAVERNS", "VERSANT", "STRAWEN", "WANTERS"],
+                "5. SENIOR": ["ERASION", "BONIEST", "SERICON", "NOTICES", "SECTION", "DITONES", "ORDINES", "ROSINED", "SORDINE", "STONIED", "ETHIONS", "HISTONE", "INOSITE", "IGNORES", "REGIONS", "SIGNORE", "HEROINS", "INSHORE", "IONISER", "IRONIES", "IRONISE", "NOISIER", "LIENORS", "NEROLIS", "SONLIER", "MERINOS", "MERSION", "NORMIES", "EROSION", "ORPINES", "PIONERS", "PROINES", "IRONERS", "ROSINER", "ORNISES", "SENIORS", "SONERIS", "SONSIER", "NOSIEST", "SONTIES", "STONIES", "TONIEST", "ORIENTS", "STONIER", "TERSION", "TRIONES", "NORITES", "OESTRIN"],
+                "6. TONIES": ["ATONIES", "BONIEST", "EBONIST", "NOTICES", "SECTION", "DITONES", "STONIED", "ETHIONS", "HISTONE", "INOSITE", "JONTIES", "ENTOILS", "LIONETS", "ONLIEST", "MESTINO", "MOISTEN", "MONTIES", "SENTIMO", "INTONES", "TENSION", "ISOTONE", "TOONIES", "PINTOES", "POINTES", "PONTIES", "NORITES", "OESTRIN", "ORIENTS", "STONIER", "TERSION", "TRIONES", "NOSIEST", "SONTIES", "STONIES", "TONIEST", "TONITES", "SNOTTIE", "TONITUS", "OUTSINE", "TOWNIES", "TWONIES", "TOXINES"],
+                "7. SANTER": ["SANTERA", "BANTERS", "BARNETS", "CANTERS", "CARNETS", "NECTARS", "RECANTS", "SCANTER", "TANRECS", "TRANCES", "DARNEST", "ENDARTS", "STANDER", "STARNED", "EARNEST", "EASTERN", "NEAREST", "RATEENS", "STERANE", "FAINTER", "FENITAR", "ARGENTS", "GARNETS", "STRANGE", "ANTHERS", "HARTENS", "THENARS", "INTRANS", "TANNERS", "ATONERS", "SANTERO", "SENATOR", "TREASON", "PANTERS", "PARENTS", "PASTERN", "PERSANT", "TREPANS", "ERRANTS", "RANTERS", "SARSNET", "TRANSES", "NATTERS", "TRATTENS", "AUNTERS", "NATURES", "SAUNTER", "SERVANT", "TAVERNS", "VERSANT", "STRAWEN", "WANTERS"],
+                "8. SINTER": ["REBINDS", "CISTERN", "CRETINS", "TINDERS", "ENTIRES", "ENTRIES", "NERITES", "RETINES", "TRENISE", "TRIENES", "SNIFTER", "RESTING", "STINGER", "HINTERS", "NITHERS", "REKNITS", "SKINTER", "STINKER", "TINKERS", "LINTERS", "SLINTER", "SNIRTLE", "ENTRISM", "MINSTER", "MINTERS", "REMINTS", "INTERNS", "TINNERS", "NORITES", "OESTRIN", "ORIENTS", "STONIER", "TERSION", "TRIONES", "NIPTERS", "PTERINS", "ESTRINS", "INSERTS", "SINTERS", "STRINES", "ENTRIST", "RETINTS", "STINTER", "TINTERS", "NUTSIER", "TRIUNES", "UNITERS", "INVERTS", "STRIVEN", "TWINERS", "WINTERS", "SINTERY"],
+                "9. TONERS": ["ATONERS", "SANTERO", "SENATOR", "TREASON", "BRETONS", "CONSTER", "CORNETS", "CRESTON", "CRETONS", "CRONETS", "RECTONS", "RODENTS", "SNORTED", "ESTRONE", "FRONTES", "TONGERS", "HORNETS", "SHORTEN", "THRENOS", "THRONES", "NORITES", "OESTRIN", "ORIENTS", "STONIER", "TERSION", "TRIONES", "REKNOTS", "STONKER", "TONKERS", "LENTORS", "MENTORS", "MONSTER", "MONTRES", "ENROOTS", "POSTERN", "PRONEST", "SNORTER", "NESTORS", "STONERS", "TENSORS", "ROTTENS", "SNOTTER", "STENTOR", "TENOURS", "TONSURE", "TYRONES"],
+                "10. EASTER": ["AERATES", "BEATERS", "BERATES", "REBATES", "CERATES", "CREATES", "ECARTES", "SECRETA", "DEAREST", "DERATES", "ESTRADE", "REASTED", "REDATES", "SEDATER", "STEARED", "TASERED", "AFREETS", "FEASTER", "ERGATES", "RESTAGE", "AETHERS", "HEATERS", "REHEATS", "AERIEST", "SERIATE", "RETAKES", "SAKERET", "ELATERS", "REALEST", "RELATES", "RESLATE", "STEALER", "REMATES", "RETEAMS", "STEAMER", "TEAMERS", "EARNEST", "EASTERN", "NEAREST", "RATEENS", "STERANE", "ROSEATE", "EPATERS", "REPEATS", "RETAPES", "RETEARS", "SERRATE", "TEARERS", "EASTERS", "RESEATS", "SAETERS", "SEAREST", "SEATERS", "STEARES", "TEASERS", "TESSERA", "ESTREAT", "RESTATE", "RETASTE", "AUSTERE", "SWEATER"],
+                "11. SENORA": ["ANOESIS", "PERSONA", "REASONS", "SENORAS", "SENHORA", "SERRANO", "ROANERS", "SONSIER", "ORNISES", "ARSONIE", "ERASION"],
+                "12. RAINED": ["BANDIER", "BRAINED", "CAIRNED", "CARNIED", "DANCIER", "DANDIER", "DRAINED", "FRIANDE", "AREDING", "DEARING", "DERAIGN", "EARDING", "GRADINE", "GRAINED", "READING", "HANDIER", "DENARII", "INARMED", "MARDINE", "NARDINE", "ANEROID", "PARDINE", "DRAINER", "RANDIER", "RANDIES", "SANDIER", "SARDINE", "ANTIRED", "DETRAIN", "TRAINED", "UNAIRED", "URANIDE", "INVADER", "RAVINED"],
+                "13. LESION": ["ANISOLE", "SEALION", "BOLINES", "CINEOLS", "CONSEIL", "INCLOSE", "DOLINES", "INDOLES", "SONDELI", "OLEFINS", "ELOIGNS", "LEGIONS", "LIGNOSE", "LINGOES", "LONGIES", "ELISION", "ISOLINE", "NOILIES", "LIONELS", "NIELLOS", "LOMEINS", "MOLINES", "EPSILON", "PINOLES", "LIENORS", "NEROLIS", "SONLIER", "ESLOINS", "INSOLES", "LESIONS", "LIONESS", "ENTOILS", "LIONETS", "ONLIEST", "ELUSION"],
+                "14. TORIES": ["BORIEST", "BROIEST", "ORBIEST", "CORSITE", "EROTICS", "SECTORI", "EDITORS", "ROISTED", "ROSITED", "SORTIED", "STEROID", "STORIED", "TRIODES", "FOISTER", "FORTIES", "TROFIES", "GOITERS", "GOITRES", "GORIEST", "HERIOTS", "HOISTER", "SHORTIE", "TOSHIER", "RIOTISE", "ROKIEST", "ESTRIOL", "LOITERS", "TOILERS", "EROTISM", "MOISTER", "MORTISE", "TRISOME", "NORITES", "OESTRIN", "ORIENTS", "STONIER", "TERSION", "TRIONES", "OORIEST", "ROOTIES", "SOOTIER", "TOORIES", "PERIOST", "PORIEST", "PROSTIE", "REPOSIT", "RIPOSTE", "ROPIEST", "RIOTERS", "ROISTER", "RORIEST", "ROESTIS", "ROSIEST", "SIROSET", "SORITES", "SORTIES", "STORIES", "TOSSIER", "TRIOSES", "STOITER", "TORTIES", "OURIEST", "STOURIE", "TOURIES", "TOUSIER", "TORSIVE", "OWRIEST", "TOWSIER"],
+                "15. AILERS": ["AERIALS", "BAILERS", "CLARIES", "ECLAIRS", "SCALIER", "DERAILS", "DIALERS", "REDIALS", "SIDERAL", "EARLIES", "REALISE", "GLAIRES", "GRAILES", "HAILERS", "HALIERS", "SHALIER", "LAIRISE", "JAILERS", "LAIKERS", "SERKALI", "RALLIES", "SALLIER", "MAILERS", "REALISM", "REMAILS", "ALINERS", "NAILERS", "RENAILS", "PALSIER", "PARLIES", "RAILERS", "RERAILS", "AIRLESS", "RESAILS", "SAILERS", "SERAILS", "SERIALS", "REALIST", "RETAILS", "SALTIER", "SALTIRE", "SLATIER", "TAILERS", "REVISAL", "SWALIER", "WAILERS"]
+            }
+        };
+
+        let currentCategory = '2';
+        let wordListPool = [];
+        let allAnagrams = [];
+        let foundWords = [];
+        let score = 0;
+        let solvedTileSets = 0;
+        let isRevealedMode = false;
+        let streak = 0;
+        let isPaused = false;
+        let playerName = "Player";
+        
+        let currentBaseWord = "";
+        let lastRoundInfo = null;
+        let wasPausedBeforeModal = false;
+        let hintedWords = [];
+        
+        // NEW STATS TRACKING
+        let sessionTotalTargetWords = 0;
+        let sessionCorrectWords = 0;
+        let sessionMissedWords = [];
+        let roundLegitFoundWords = [];
+        
+        let timeLeft = 10;
+        let maxTime = 10;
+        let timerInterval = null;
+        let autoAdvanceTimeout = null;
+
+        const scrabblePoints = {
+            A:1, B:3, C:3, D:2, E:1, F:4, G:2, H:4, I:1, J:8, K:5, L:1, M:3, N:1, O:1, P:3, Q:10, R:1, S:1, T:1, U:1, V:4, W:4, X:8, Y:4, Z:10
+        };
+
+        const screens = {
+            welcome: document.getElementById('welcome-screen'),
+            setup: document.getElementById('setup-screen'),
+            game: document.getElementById('game-screen'),
+            result: document.getElementById('result-screen')
+        };
+
+        function showScreen(screenKey) {
+            Object.values(screens).forEach(s => s.classList.add('hidden'));
+            screens[screenKey].classList.remove('hidden');
+            if(screenKey === 'welcome' || screenKey === 'game' || screenKey === 'result' || screenKey === 'setup'){
+                screens[screenKey].classList.add('flex'); // Keep the flex-col layout active
+            }
+        }
+
+        function goToWelcome() {
+            showScreen('welcome');
+        }
+
+        function goToSetup() {
+            const nameInput = document.getElementById('player-name-input').value.trim();
+            if (nameInput) {
+                playerName = nameInput;
+            }
+            document.getElementById('setup-player-name').innerText = playerName;
+            document.getElementById('player-name-display').innerText = playerName;
+            document.getElementById('result-player-name').innerText = playerName;
+            showScreen('setup');
+        }
+
+        function backToCategories() {
+            document.getElementById('sub-category-section').classList.add('hidden');
+            document.getElementById('sub-category-section').classList.remove('flex');
+            
+            document.getElementById('main-category-section').classList.remove('hidden');
+            document.getElementById('main-category-section').classList.add('flex');
+            
+            document.getElementById('setup-title').innerText = "Choose a Category:";
+        }
+
+        function selectCategory(cat, name) {
+            currentCategory = cat;
+            
+            // Handle Screen Transition
+            document.getElementById('main-category-section').classList.add('hidden');
+            document.getElementById('main-category-section').classList.remove('flex');
+            
+            document.getElementById('sub-category-section').classList.remove('hidden');
+            document.getElementById('sub-category-section').classList.add('flex');
+            
+            document.getElementById('selected-cat-name').innerText = name;
+            document.getElementById('setup-title').innerText = "Configure Game:";
+            
+            const customArea = document.getElementById('custom-input-area');
+            const subcatArea = document.getElementById('subcategory-area');
+            const subcatSelect = document.getElementById('subcat-select');
+            const subcatLabel = document.getElementById('subcat-label');
+
+            customArea.classList.add('hidden');
+            subcatArea.classList.add('hidden');
+
+            if (cat === 'custom') {
+                customArea.classList.remove('hidden');
+            } else if (cat === 'Bingo') {
+                subcatArea.classList.remove('hidden');
+                subcatLabel.innerText = "Bingo Subcategory:";
+                
+                const bingoData = CSW24['Bingo'];
+                const stemMap = {
+                    "1. TISANE": "AEINST", "2. SATIRE": "AEIRST", "3. RETINA": "AEINRT",
+                    "4. AINERS": "AEINRS", "5. SENIOR": "EINORS", "6. TONIES": "EINOST",
+                    "7. SANTER": "AENRST", "8. SINTER": "EINRST", "9. TONERS": "ENORST",
+                    "10. EASTER": "AEERST", "11. SENORA": "AENORS", "12. RAINED": "ADEINR",
+                    "13. LESION": "EILNOS", "14. TORIES": "EIORST", "15. AILERS": "AEILRS"
+                };
+
+                let optionsHTML = '';
+                // Use ordered keys to maintain the 1-15 sequence
+                const orderedKeys = [
+                    "1. TISANE", "2. SATIRE", "3. RETINA", "4. AINERS", "5. SENIOR",
+                    "6. TONIES", "7. SANTER", "8. SINTER", "9. TONERS", "10. EASTER",
+                    "11. SENORA", "12. RAINED", "13. LESION", "14. TORIES", "15. AILERS"
+                ];
+
+                orderedKeys.forEach(key => {
+                    if (bingoData[key]) {
+                        const count = bingoData[key].length;
+                        const stem = stemMap[key] || '';
+                        optionsHTML += `<option value="${key}">${key} (${stem}) [${count} words]</option>`;
+                    }
+                });
+                
+                subcatSelect.innerHTML = optionsHTML;
+
+            } else {
+                subcatArea.classList.remove('hidden');
+                subcatLabel.innerText = "Word Group:";
+                
+                const words = CSW24[cat];
+                const allCount = words.length;
+                const heavyCount = words.filter(w => /[JQXZ]/.test(w)).length;
+                
+                let optionsHTML = `<option value="All">All ${cat}-Letter Words (${allCount})</option>`;
+                optionsHTML += `<option value="Heavy">Heavy Words (J, Q, X, Z) (${heavyCount})</option>`;
+                
+                const letterCounts = {};
+                
+                // Count words for each starting letter (excluding heavy words to match game logic)
+                words.forEach(w => {
+                    if (!/[JQXZ]/.test(w)) {
+                        const l = w[0];
+                        letterCounts[l] = (letterCounts[l] || 0) + 1;
+                    }
+                });
+
+                // Generate alphabetical options
+                Object.keys(letterCounts).sort().forEach(l => {
+                    optionsHTML += `<option value="${l}">Starts with ${l} (${letterCounts[l]})</option>`;
+                });
+                
+                subcatSelect.innerHTML = optionsHTML;
+            }
+        }
+
+        function getFullDictionary() {
+            if (currentCategory === 'custom') {
+                const input = document.getElementById('word-input').value;
+                return input.toUpperCase().split(/[\s,]+/).filter(w => w.length > 1);
+            } else if (currentCategory === 'Bingo') {
+                const subcat = document.getElementById('subcat-select').value;
+                return [...CSW24['Bingo'][subcat]];
+            } else {
+                const subcat = document.getElementById('subcat-select').value;
+                const allWords = CSW24[currentCategory];
+                
+                if (subcat === 'All') {
+                    return [...allWords];
+                } else if (subcat === 'Heavy') {
+                    // Extract only words containing J, Q, X, or Z
+                    return allWords.filter(w => /[JQXZ]/.test(w));
+                } else {
+                    // Extract words starting with the letter, but EXCLUDE J, Q, X, Z words
+                    return allWords.filter(w => w[0] === subcat && !/[JQXZ]/.test(w));
+                }
+            }
+        }
+
+        function getMasterDictionary() {
+            // For alphabetical subcategories, we need the FULL dictionary to find ALL anagram variations (like AB and BA)
+            if (currentCategory === 'custom' || currentCategory === 'Bingo') {
+                return getFullDictionary();
+            } else {
+                return CSW24[currentCategory]; 
+            }
+        }
+
+        function startGame() {
+            wordListPool = getFullDictionary();
+            
+            if (wordListPool.length === 0) {
+                alert("Please select a category or enter words.");
+                return;
+            }
+
+            playerName = document.getElementById('player-name-input').value.trim() || "Player";
+            document.getElementById('player-name-display').innerText = playerName;
+            document.getElementById('result-player-name').innerText = playerName;
+
+            score = 0;
+            streak = 0;
+            solvedTileSets = 0;
+            isPaused = false;
+            currentBaseWord = "";
+            lastRoundInfo = null;
+            hintedWords = [];
+            document.getElementById('prev-btn').disabled = true;
+            
+            sessionTotalTargetWords = 0;
+            sessionCorrectWords = 0;
+            sessionMissedWords = [];
+            roundLegitFoundWords = [];
+            
+            clearTimeout(autoAdvanceTimeout);
+            
+            document.getElementById('pause-btn').innerHTML = '<span>⏸️</span> Pause';
+            document.getElementById('pause-btn').classList.replace('text-emerald-600', 'text-indigo-600');
+            document.getElementById('pause-btn').classList.replace('bg-emerald-50', 'bg-indigo-50');
+            document.getElementById('answer-input').disabled = false;
+            document.getElementById('answer-input').placeholder = "____";
+            document.getElementById('submit-btn').disabled = false;
+            document.getElementById('hint-btn').disabled = false;
+            document.getElementById('skip-btn').disabled = false;
+            
+            document.getElementById('pause-overlay').classList.add('hidden');
+            document.getElementById('pause-overlay').classList.remove('flex');
+            
+            updateUI();
+            nextWord();
+            showScreen('game');
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            const pauseBtn = document.getElementById('pause-btn');
+            const input = document.getElementById('answer-input');
+            const submitBtn = document.getElementById('submit-btn');
+            const hintBtn = document.getElementById('hint-btn');
+            const skipBtn = document.getElementById('skip-btn');
+            const pauseOverlay = document.getElementById('pause-overlay');
+            
+            if (isPaused) {
+                stopTimer();
+                pauseBtn.innerHTML = '<span>▶️</span> Resume';
+                pauseBtn.classList.replace('text-indigo-600', 'text-emerald-600');
+                pauseBtn.classList.replace('bg-indigo-50', 'bg-emerald-50');
+                
+                pauseOverlay.classList.remove('hidden');
+                pauseOverlay.classList.add('flex');
+
+                input.disabled = true;
+                input.placeholder = "PAUSED";
+                submitBtn.disabled = true;
+                hintBtn.disabled = true;
+                skipBtn.disabled = true;
+            } else {
+                resumeTimer();
+                pauseBtn.innerHTML = '<span>⏸️</span> Pause';
+                pauseBtn.classList.replace('text-emerald-600', 'text-indigo-600');
+                pauseBtn.classList.replace('bg-emerald-50', 'bg-indigo-50');
+                
+                pauseOverlay.classList.add('hidden');
+                pauseOverlay.classList.remove('flex');
+
+                input.disabled = false;
+                input.placeholder = "____";
+                submitBtn.disabled = false;
+                hintBtn.disabled = false;
+                skipBtn.disabled = false;
+                input.focus();
+            }
+        }
+
+        function exitToHome() {
+            stopTimer();
+            isPaused = false;
+            clearTimeout(autoAdvanceTimeout);
+            document.getElementById('pause-overlay').classList.add('hidden');
+            document.getElementById('pause-overlay').classList.remove('flex');
+            
+            // Process current round as unfinished before showing summary
+            if (currentBaseWord) {
+                const missedThisRound = allAnagrams.filter(w => !roundLegitFoundWords.includes(w));
+                sessionMissedWords.push(...missedThisRound);
+                currentBaseWord = ""; // clear so it doesn't get processed again
+            }
+            
+            endGame(true);
+        }
+
+        function showPreviousAnswer() {
+            if (!lastRoundInfo) return;
+            
+            // Remember pause state so we can restore it when modal closes
+            wasPausedBeforeModal = isPaused;
+            
+            // Force pause the game behind the scenes if it's running
+            if (!isPaused) {
+                togglePause(); 
+            }
+            
+            // Populate Modal
+            const tilesContainer = document.getElementById('prev-tiles');
+            tilesContainer.innerHTML = '';
+            // Display tiles in alphabetical order to represent the base "rack"
+            lastRoundInfo.baseWord.split('').sort().forEach(char => {
+                tilesContainer.appendChild(createTile(char));
+            });
+            
+            const wordsContainer = document.getElementById('prev-words');
+            wordsContainer.innerHTML = '';
+            lastRoundInfo.allAnagrams.forEach(word => {
+                const span = document.createElement('span');
+                if (lastRoundInfo.foundWords.includes(word)) {
+                    span.className = "found-word-tag";
+                } else {
+                    span.className = "missing-word-tag";
+                }
+                span.innerText = word;
+                wordsContainer.appendChild(span);
+            });
+            
+            document.getElementById('prev-modal').classList.remove('hidden');
+            document.getElementById('prev-modal').classList.add('flex');
+        }
+
+        function closePreviousAnswer() {
+            document.getElementById('prev-modal').classList.add('hidden');
+            document.getElementById('prev-modal').classList.remove('flex');
+            
+            // Restore previous pause state
+            if (!wasPausedBeforeModal && isPaused) {
+                togglePause();
+            }
+        }
+
+        function startTimer() {
+            maxTime = (currentCategory === 'Bingo') ? 20 : 10;
+            timeLeft = maxTime;
+            updateTimerUI();
+            resumeTimer();
+        }
+        
+        function resumeTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                updateTimerUI();
+                
+                if (timeLeft <= 0) {
+                    handleTimeout();
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        function updateTimerUI() {
+            const timerText = document.getElementById('timer-text');
+            const timerBar = document.getElementById('timer-bar');
+            
+            timerText.innerText = `${timeLeft}s`;
+            const percentage = (timeLeft / maxTime) * 100;
+            timerBar.style.width = `${percentage}%`;
+            
+            if (timeLeft <= 3) {
+                timerText.classList.remove('text-indigo-600');
+                timerText.classList.add('text-rose-500', 'animate-pulse');
+                timerBar.classList.remove('bg-indigo-600');
+                timerBar.classList.add('bg-rose-500');
+            } else {
+                timerText.classList.add('text-indigo-600');
+                timerText.classList.remove('text-rose-500', 'animate-pulse');
+                timerBar.classList.add('bg-indigo-600');
+                timerBar.classList.remove('bg-rose-500');
+            }
+        }
+
+        function handleTimeout() {
+            stopTimer(); // Pause timer while they review the correct answers
+            let streakLost = streak > 1;
+            streak = 0;
+            score = Math.max(0, score - 5);
+            isRevealedMode = true;
+            
+            const feedback = document.getElementById('feedback');
+            feedback.innerText = streakLost ? `Time's up! Combo lost. -5 pts` : `Time's up! -5 pts`;
+            feedback.className = "h-5 mb-3 font-bold text-xs text-rose-500";
+            
+            renderFoundWords();
+            updateUI();
+            
+            const input = document.getElementById('answer-input');
+            input.parentElement.classList.add('shake');
+            setTimeout(() => {
+                input.parentElement.classList.remove('shake');
+            }, 500);
+            input.focus();
+        }
+
+        function areAnagrams(s1, s2) {
+            if (s1.length !== s2.length) return false;
+            return s1.split('').sort().join('') === s2.split('').sort().join('');
+        }
+
+        function findAllAnagrams(baseWord, dictionary) {
+            return dictionary.filter(w => areAnagrams(w, baseWord));
+        }
+
+        function nextWord() {
+            stopTimer();
+            clearTimeout(autoAdvanceTimeout);
+            
+            // Save current round data to history BEFORE moving to the next one
+            if (currentBaseWord) {
+                lastRoundInfo = {
+                    baseWord: currentBaseWord,
+                    allAnagrams: [...allAnagrams],
+                    foundWords: [...foundWords]
+                };
+                document.getElementById('prev-btn').disabled = false;
+                
+                // Track missed words for the concluding round
+                const missedThisRound = allAnagrams.filter(w => !roundLegitFoundWords.includes(w));
+                sessionMissedWords.push(...missedThisRound);
+            }
+            
+            if (wordListPool.length === 0) {
+                endGame(false);
+                return;
+            }
+
+            const masterDictionary = getMasterDictionary();
+            const randomIndex = Math.floor(Math.random() * wordListPool.length);
+            currentBaseWord = wordListPool.splice(randomIndex, 1)[0];
+            
+            allAnagrams = findAllAnagrams(currentBaseWord, masterDictionary);
+            
+            // Remove all found anagrams from the pool so we don't pick them again
+            wordListPool = wordListPool.filter(w => !allAnagrams.includes(w));
+
+            foundWords = [];
+            hintedWords = [];
+            roundLegitFoundWords = []; // Reset legit found words for the new round
+            sessionTotalTargetWords += allAnagrams.length; // Add to target word pool
+            isRevealedMode = false;
+            
+            renderTiles(currentBaseWord);
+            document.getElementById('answer-input').value = "";
+            document.getElementById('answer-input').focus();
+            document.getElementById('feedback').innerText = "";
+            document.getElementById('feedback').className = "h-5 mb-3 font-bold text-xs text-gray-400";
+            
+            updateTileColors(); // Reset the greyed out tiles
+            updateUI();
+            renderFoundWords();
+            
+            // Start the countdown!
+            startTimer();
+        }
+
+        function renderTiles(word) {
+            const container = document.getElementById('tile-display');
+            container.innerHTML = "";
+            
+            let scrambled = word.split('');
+            let attempts = 0;
+            
+            // Try to arrange the tiles differently than the base word
+            do {
+                scrambled.sort(() => Math.random() - 0.5);
+                attempts++;
+            } while (scrambled.join('') === word && attempts < 10);
+            
+            scrambled.forEach(char => container.appendChild(createTile(char)));
+        }
+
+        function createTile(char) {
+            const div = document.createElement('div');
+            div.className = "scrabble-tile";
+            div.dataset.letter = char; // Store the letter for matching
+            div.innerText = char;
+            
+            const span = document.createElement('span');
+            span.className = "tile-value";
+            span.innerText = scrabblePoints[char] || 0;
+            div.appendChild(span);
+            
+            return div;
+        }
+
+        function renderFoundWords() {
+            const list = document.getElementById('found-words-list');
+            list.innerHTML = "";
+            
+            allAnagrams.forEach(word => {
+                const span = document.createElement('span');
+                if (foundWords.includes(word)) {
+                    span.className = "found-word-tag reveal-anim";
+                    span.innerText = word;
+                } else if (isRevealedMode) {
+                    span.className = "missing-word-tag reveal-anim";
+                    span.innerText = word;
+                } else if (hintedWords.includes(word)) {
+                    span.className = "inline-block px-3 py-1.5 m-0.5 bg-amber-100 border border-amber-300 rounded-full text-amber-700 text-[10px] font-bold tracking-widest";
+                    span.innerText = word[0] + "?".repeat(word.length - 1);
+                } else {
+                    span.className = "inline-block px-3 py-1.5 m-0.5 bg-gray-100 border border-gray-200 rounded-full text-gray-300 text-[10px] font-bold tracking-widest";
+                    span.innerText = "?".repeat(word.length);
+                }
+                list.appendChild(span);
+            });
+        }
+
+        function useHint() {
+            if (isPaused || isRevealedMode) return;
+
+            const availableForHint = allAnagrams.filter(w => !foundWords.includes(w) && !hintedWords.includes(w));
+            const feedback = document.getElementById('feedback');
+
+            if (availableForHint.length > 0) {
+                // Reveal the first letter of an unanswered word
+                const wordToHint = availableForHint[0];
+                hintedWords.push(wordToHint);
+
+                // Small penalty to discourage spamming
+                score = Math.max(0, score - 1);
+
+                feedback.innerText = "💡 Hint used! (-1 pt)";
+                feedback.className = "h-5 mb-3 font-bold text-xs text-amber-500";
+                
+                updateUI();
+                renderFoundWords();
+                document.getElementById('answer-input').focus();
+            } else {
+                feedback.innerText = "No more hints available!";
+                feedback.className = "h-5 mb-3 font-bold text-xs text-amber-500";
+            }
+        }
+
+        function checkAnswer() {
+            if (isPaused) return;
+
+            const input = document.getElementById('answer-input');
+            const userAnswer = input.value.trim().toUpperCase();
+            const feedback = document.getElementById('feedback');
+
+            if (allAnagrams.includes(userAnswer)) {
+                if (foundWords.includes(userAnswer)) {
+                    feedback.innerText = "You already found that one!";
+                    feedback.className = "h-5 mb-3 font-bold text-xs text-amber-500";
+                } else {
+                    foundWords.push(userAnswer);
+                    let wordScore = userAnswer.split('').reduce((acc, char) => acc + (scrabblePoints[char] || 0), 0);
+                    let pointsGained = 0;
+
+                    // If they answer it BEFORE making a mistake and seeing the answer
+                    if (!isRevealedMode) {
+                        streak++;
+                        let streakBonus = streak > 1 ? (streak - 1) * 5 : 0;
+                        pointsGained = (wordScore * 2) + streakBonus;
+                        
+                        roundLegitFoundWords.push(userAnswer); // track for summary
+                        sessionCorrectWords++; // track for accuracy
+                        
+                        feedback.innerText = `✨ Correct! +${pointsGained}${streakBonus > 0 ? ' (Combo Bonus!)' : ''}`;
+                        feedback.className = "h-5 mb-3 font-bold text-xs text-emerald-500";
+                    } else {
+                        // If they are just typing it in after it was revealed
+                        pointsGained = 0;
+                        feedback.innerText = `Word logged!`;
+                        feedback.className = "h-5 mb-3 font-bold text-xs text-gray-500";
+                    }
+                    
+                    score += pointsGained;
+                    renderFoundWords();
+                    input.value = "";
+                    updateTileColors(); // Update tiles visual state after clearing input
+                    
+                    if (foundWords.length === allAnagrams.length) {
+                        stopTimer(); // Round completed, pause timer
+                        solvedTileSets++;
+                        triggerConfetti();
+                        setTimeout(() => {
+                            nextWord();
+                        }, 1200);
+                    } else if (!isRevealedMode) {
+                        // Reset timer to full time for the next word in the set!
+                        startTimer();
+                    }
+                }
+            } else {
+                // WRONG ANSWER - UNLIMITED ATTEMPTS LOGIC
+                // We do NOT stop timer or set revealed mode anymore
+                
+                let streakLost = streak > 1;
+                streak = 0; 
+                score = Math.max(0, score - 5); 
+                
+                feedback.innerText = streakLost ? `Incorrect! Combo lost. -5 pts` : `Incorrect! -5 pts`;
+                feedback.className = "h-5 mb-3 font-bold text-xs text-rose-500";
+                
+                input.parentElement.classList.add('shake');
+                setTimeout(() => {
+                    input.parentElement.classList.remove('shake');
+                }, 500);
+
+                // Clear input so they can try again immediately
+                input.value = "";
+                updateTileColors();
+            }
+            updateUI();
+        }
+
+        function skipWord() {
+            if (isPaused) return;
+            
+            clearTimeout(autoAdvanceTimeout);
+
+            if (!isRevealedMode && foundWords.length < allAnagrams.length) {
+                // Pass / Give up
+                stopTimer();
+                let streakLost = streak > 1;
+                streak = 0;
+                score = Math.max(0, score - 5);
+                isRevealedMode = true;
+
+                const feedback = document.getElementById('feedback');
+                feedback.innerText = streakLost ? `Passed! Combo lost. -5 pts` : `Passed! -5 pts`;
+                feedback.className = "h-5 mb-3 font-bold text-xs text-rose-500";
+
+                document.getElementById('answer-input').disabled = true;
+                renderFoundWords();
+                updateUI();
+
+                // Auto skip after showing answers so player can learn them
+                autoAdvanceTimeout = setTimeout(() => {
+                    document.getElementById('answer-input').disabled = false;
+                    nextWord();
+                }, 2500);
+            } else {
+                // Second click or already revealed: immediately skip
+                document.getElementById('answer-input').disabled = false;
+                stopTimer();
+                streak = 0;
+                nextWord();
+            }
+        }
+
+        function endGame(earlyExit = false) {
+            stopTimer();
+            clearTimeout(autoAdvanceTimeout);
+            
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('final-solved').innerText = solvedTileSets;
+            
+            // Calculate accuracy
+            let accuracy = 0;
+            if (sessionTotalTargetWords > 0) {
+                accuracy = Math.round((sessionCorrectWords / sessionTotalTargetWords) * 100);
+            }
+            document.getElementById('final-accuracy').innerText = `${accuracy}%`;
+            
+            // Update Title
+            if (earlyExit) {
+                document.getElementById('result-title').innerText = `${playerName} Exited`;
+                document.getElementById('result-icon').innerText = "🚪";
+            } else {
+                document.getElementById('result-title').innerText = "Quiz Finished!";
+                document.getElementById('result-icon').innerText = "🎖️";
+            }
+            
+            // Render missed words
+            const missedContainer = document.getElementById('missed-words-container');
+            
+            missedContainer.innerHTML = "";
+            if (sessionMissedWords.length === 0) {
+                document.getElementById('missed-count').innerText = "0";
+                missedContainer.innerHTML = '<span class="text-sm font-bold text-emerald-500">Perfect! No missed words.</span>';
+                missedContainer.className = "bg-emerald-50 border border-emerald-100 p-2 rounded-xl flex justify-center items-center h-16";
+            } else {
+                missedContainer.className = "bg-rose-50 border border-rose-100 p-2 rounded-xl max-h-32 overflow-y-auto screen-scroll flex flex-wrap justify-center gap-1";
+                // Filter out duplicates just in case
+                const uniqueMissed = [...new Set(sessionMissedWords)];
+                document.getElementById('missed-count').innerText = uniqueMissed.length;
+                
+                uniqueMissed.forEach(word => {
+                    const span = document.createElement('span');
+                    span.className = "missing-word-tag !m-1"; 
+                    span.innerText = word;
+                    missedContainer.appendChild(span);
+                });
+            }
+
+            showScreen('result');
+        }
+
+        function updateUI() {
+            document.getElementById('score').innerText = score;
+            document.getElementById('answered-count').innerText = solvedTileSets;
+            document.getElementById('remaining-count').innerText = wordListPool.length;
+            document.getElementById('progress-display').innerText = `${foundWords.length} / ${allAnagrams.length}`;
+            
+            const streakContainer = document.getElementById('streak-container');
+            const streakLabel = document.getElementById('streak-label');
+            
+            // Only show combo UI if they have more than 1 in a row
+            if (streak > 1) {
+                streakContainer.classList.remove('hidden');
+                streakLabel.innerText = `${streak} COMBO!`;
+            } else {
+                streakContainer.classList.add('hidden');
+            }
+        }
+
+        function resetApp() {
+            stopTimer();
+            clearTimeout(autoAdvanceTimeout);
+            backToCategories(); // Reset to the main category grid for the next session
+            showScreen('setup');
+        }
+
+        function updateTileColors() {
+            const input = document.getElementById('answer-input');
+            if (!input) return;
+            
+            const typed = input.value.toUpperCase().split('');
+            const tiles = Array.from(document.querySelectorAll('#tile-display .scrabble-tile'));
+
+            // Reset all back to yellow
+            tiles.forEach(t => t.classList.remove('used'));
+
+            // Match typed letters left-to-right and gray them out
+            typed.forEach(char => {
+                const availableTile = tiles.find(t => t.dataset.letter === char && !t.classList.contains('used'));
+                if (availableTile) {
+                    availableTile.classList.add('used');
+                }
+            });
+        }
+
+        document.getElementById('answer-input').addEventListener('input', updateTileColors);
+
+        document.getElementById('answer-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') checkAnswer();
+        });
+
+        function triggerConfetti() {
+            const container = document.getElementById('app');
+            for (let i = 0; i < 20; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = '50%';
+                confetti.style.top = '40%';
+                confetti.style.backgroundColor = ['#f4d03f', '#4f46e5', '#10b981', '#f87171'][Math.floor(Math.random() * 4)];
+                container.appendChild(confetti);
+
+                const destX = (Math.random() - 0.5) * 400;
+                const destY = (Math.random() - 0.5) * 400;
+
+                const animation = confetti.animate([
+                    { transform: `translate(0, 0) scale(1)`, opacity: 1 },
+                    { transform: `translate(${destX}px, ${destY}px) scale(0)`, opacity: 0 }
+                ], {
+                    duration: 600 + Math.random() * 400,
+                    easing: 'cubic-bezier(0, .9, .57, 1)'
+                });
+
+                animation.onfinish = () => confetti.remove();
+            }
+        }
+
+        // Initialize default category selection on load
+        window.onload = () => {
+            showScreen('welcome');
+        };
+    </script>
+</body>
+</html>
